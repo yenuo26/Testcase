@@ -483,37 +483,38 @@ def _assert_benchmark_success(benchmark_params: Dict[str, Any]):
         logger.warning("结果文件未生成")
 
 
-def test_kvc_hot_perf_10k(vllm_service_with_params, request):
-    """KVC hot-score 策略，10 万上下文 Benchmark"""
+def _run_named_benchmark_test(request, label: str):
+    """按 TEST_CONFIGS 中同名 key 的配置执行 benchmark"""
     benchmark_params = request.node.benchmark_params
     logger.info("=" * 50)
-    logger.info("开始执行 KVC hot-score 10k Benchmark 测试...")
+    logger.info(f"开始执行 {label} Benchmark 测试...")
     logger.info("=" * 50)
     _assert_benchmark_success(benchmark_params)
     logger.info("=" * 50)
-    logger.info("✓ KVC hot-score 10k 测试通过！")
+    logger.info(f"✓ {label} 测试通过！")
     logger.info("=" * 50)
 
 
 def test_kvc_hot_perf_1M(vllm_service_with_params, request):
-    """KVC hot-score 策略，1M上下文 Benchmark"""
-    benchmark_params = request.node.benchmark_params
-    logger.info("=" * 50)
-    logger.info("开始执行 KVC hot-score 100k Benchmark 测试...")
-    logger.info("=" * 50)
-    _assert_benchmark_success(benchmark_params)
-    logger.info("=" * 50)
-    logger.info("✓ KVC hot-score 100k 测试通过！")
-    logger.info("=" * 50)
+    """KVC hot-score 策略，100 万上下文"""
+    _run_named_benchmark_test(request, "KVC hot-score 1M")
 
 
-def test_kvc_baseline_perf_10k(vllm_service_with_params, request):
-    """Baseline（无 KVC 策略），10 万上下文 Benchmark"""
-    benchmark_params = request.node.benchmark_params
-    logger.info("=" * 50)
-    logger.info("开始执行 Baseline 10k Benchmark 测试...")
-    logger.info("=" * 50)
-    _assert_benchmark_success(benchmark_params)
-    logger.info("=" * 50)
-    logger.info("✓ Baseline 10k 测试通过！")
-    logger.info("=" * 50)
+def test_kvc_hot_perf_100k_2048(vllm_service_with_params, request):
+    """KVC hot-score 策略，10 万上下文，sparse_topk=2048"""
+    _run_named_benchmark_test(request, "KVC hot-score 100k (topk=2048)")
+
+
+def test_kvc_hot_perf_100k_4096(vllm_service_with_params, request):
+    """KVC hot-score 策略，10 万上下文，sparse_topk=4096"""
+    _run_named_benchmark_test(request, "KVC hot-score 100k (topk=4096)")
+
+
+def test_kvc_baseline_perf_1M(vllm_service_with_params, request):
+    """Baseline 基线，100 万上下文"""
+    _run_named_benchmark_test(request, "Baseline 1M")
+
+
+def test_kvc_baseline_perf_100k(vllm_service_with_params, request):
+    """Baseline 基线，10 万上下文"""
+    _run_named_benchmark_test(request, "Baseline 100k")

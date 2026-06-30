@@ -57,13 +57,17 @@ export AUTO_CLEANUP=false   # 测试后保留 vLLM 进程便于调试
 
 ## 测试用例
 
+测试函数名须与 `TEST_CONFIGS` 中的 key **完全一致**，fixture 才会加载对应配置。
+
 | 测试函数 | 说明 | vLLM 特点 | 输入长度 |
 |----------|------|-----------|----------|
-| `test_kvc_hot_perf_10k` | KVC hot-score，10 万上下文 | `--cache-policy hot-score --sparse-topk 2048` | 32k ~ 100k |
-| `test_kvc_hot_perf_100k` | KVC hot-score，100 万上下文 | `max_model_len=1000000` | 700k ~ 1M |
-| `test_kvc_baseline_perf_10k` | 无 KVC 策略基线 | 不启用 cache-policy | 32k ~ 100k |
+| `test_kvc_hot_perf_1M` | KVC hot-score，100 万上下文 | `--cache-policy hot-score --sparse-topk 2048` | 700k ~ 1M |
+| `test_kvc_hot_perf_100k_2048` | KVC hot-score，10 万上下文 | `sparse_topk=2048` | 32k ~ 100k |
+| `test_kvc_hot_perf_100k_4096` | KVC hot-score，10 万上下文 | `sparse_topk=4096` | 32k ~ 100k |
+| `test_kvc_baseline_perf_1M` | Baseline，100 万上下文 | 不启用 cache-policy | 700k ~ 1M |
+| `test_kvc_baseline_perf_100k` | Baseline，10 万上下文 | 不启用 cache-policy | 32k ~ 100k |
 
-各用例的 vLLM / benchmark 参数定义在 `test_kvc.py` 顶部的 `TEST_CONFIGS` 字典中，修改配置请编辑该字典。
+各用例的 vLLM / benchmark 参数定义在 `test_kvc.py` 中的 `TEST_CONFIGS` 字典，修改配置请编辑该字典并保持 key 与测试函数名一致。
 
 ## 使用方法
 
@@ -76,14 +80,18 @@ pytest test_kvc.py -v
 ### 运行单个测试
 
 ```bash
-# KVC 10k
-pytest test_kvc.py::test_kvc_hot_perf_10k -v
+# KVC 100k，topk=2048
+pytest test_kvc.py::test_kvc_hot_perf_100k_2048 -v
 
-# KVC 100k（耗时长、显存/内存需求高）
-pytest test_kvc.py::test_kvc_hot_perf_100k -v
+# KVC 100k，topk=4096
+pytest test_kvc.py::test_kvc_hot_perf_100k_4096 -v
+
+# KVC 1M（耗时长、显存/内存需求高）
+pytest test_kvc.py::test_kvc_hot_perf_1M -v
 
 # Baseline 对比
-pytest test_kvc.py::test_kvc_baseline_perf_10k -v
+pytest test_kvc.py::test_kvc_baseline_perf_100k -v
+pytest test_kvc.py::test_kvc_baseline_perf_1M -v
 ```
 
 ### 查看实时输出
