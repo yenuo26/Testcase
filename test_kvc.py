@@ -16,14 +16,8 @@ import pytest
 from typing import Optional, Tuple, Dict, Any
 
 # ============================================
-# 日志配置
+# 日志配置（pytest 下由 pytest.ini 的 log_cli 负责打屏，勿再 basicConfig）
 # ============================================
-logging.basicConfig(
-    level=logging.INFO,
-    format='[%(levelname)s] %(asctime)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S',
-    force=True,
-)
 logger = logging.getLogger(__name__)
 
 
