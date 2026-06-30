@@ -43,6 +43,7 @@ class BaseConfig:
     # 日志配置
     VLLM_LOG = os.environ.get("VLLM_LOG", os.path.join(WORK_DIR, "vllm_run.log"))
     BENCHMARK_LOG = os.environ.get("BENCHMARK_LOG", os.path.join(WORK_DIR, "run_benchmark.log"))
+    PRED_LOG = os.environ.get("PRED_LOG", os.path.join(WORK_DIR, "run_pred.log"))
 
     # 服务配置
     PORT = int(os.environ.get("PORT", 8001))
@@ -59,12 +60,18 @@ class BaseConfig:
 # ============================================
 # 辅助函数
 # ============================================
-def print_config(vllm_params: Dict[str, Any], benchmark_params: Dict[str, Any]):
+def print_config(
+    vllm_params: Dict[str, Any],
+    benchmark_params: Dict[str, Any],
+    pred_params: Optional[Dict[str, Any]] = None,
+):
     """打印当前配置"""
     logger.info("=" * 50)
     logger.info("当前配置:")
     logger.info(f"  MODEL_PATH: {BaseConfig.MODEL_PATH}")
+    logger.info(f"  MODEL_NAME: {BaseConfig.MODEL_NAME}")
     logger.info(f"  BENCHMARK_DIR: {BaseConfig.BENCHMARK_DIR}")
+    logger.info(f"  DATASET_DIR: {BaseConfig.DATASET_DIR}")
     logger.info(f"  DATASET_PATH: {BaseConfig.DATASET_PATH}")
     logger.info(f"  PORT: {BaseConfig.PORT}")
     logger.info(f"  BASE_URL: {BaseConfig.BASE_URL}")
@@ -73,13 +80,20 @@ def print_config(vllm_params: Dict[str, Any], benchmark_params: Dict[str, Any]):
     for key, value in vllm_params.items():
         logger.info(f"    {key}: {value}")
     logger.info("")
-    logger.info("  Benchmark参数:")
-    for key, value in benchmark_params.items():
-        logger.info(f"    {key}: {value}")
+    if benchmark_params:
+        logger.info("  Benchmark参数:")
+        for key, value in benchmark_params.items():
+            logger.info(f"    {key}: {value}")
+        logger.info("")
+    if pred_params:
+        logger.info("  Pred参数:")
+        for key, value in pred_params.items():
+            logger.info(f"    {key}: {value}")
+        logger.info("")
     logger.info("=" * 50)
 
 
-def check_paths():
+def check_paths(require_benchmark: bool = True):
     """检查所有路径是否存在"""
     logger.info("检查路径配置...")
 
@@ -87,16 +101,26 @@ def check_paths():
         raise FileNotFoundError(f"模型路径不存在: {BaseConfig.MODEL_PATH}")
     logger.info(f"✓ 模型路径: {BaseConfig.MODEL_PATH}")
 
-    benchmark_script = os.path.join(BaseConfig.BENCHMARK_DIR, "benchmarks", "benchmark_serving.py")
-    if not os.path.exists(benchmark_script):
-        raise FileNotFoundError(f"Benchmark脚本不存在: {benchmark_script}")
-    logger.info(f"✓ Benchmark路径: {BaseConfig.BENCHMARK_DIR}")
+    if require_benchmark:
+        benchmark_script = os.path.join(BaseConfig.BENCHMARK_DIR, "benchmarks", "benchmark_serving.py")
+        if not os.path.exists(benchmark_script):
+            raise FileNotFoundError(f"Benchmark脚本不存在: {benchmark_script}")
+        logger.info(f"✓ Benchmark路径: {BaseConfig.BENCHMARK_DIR}")
 
     if not os.path.exists(BaseConfig.DATASET_PATH):
         raise FileNotFoundError(f"数据集不存在: {BaseConfig.DATASET_PATH}")
     logger.info(f"✓ 数据集路径: {BaseConfig.DATASET_PATH}")
 
     return True
+
+
+def check_pred_script():
+    """检查 pred.py 是否存在"""
+    pred_script = os.path.join(BaseConfig.DATASET_DIR, "pred.py")
+    if not os.path.exists(pred_script):
+        raise FileNotFoundError(f"Pred脚本不存在: {pred_script}")
+    logger.info(f"✓ Pred脚本: {pred_script}")
+    return pred_script
 
 
 # ============================================
@@ -318,6 +342,76 @@ def run_benchmark(benchmark_params: Dict[str, Any]) -> Tuple[int, str]:
         raise RuntimeError(f"Benchmark执行失败: {e}")
 
 
+def run_pred(pred_params: Dict[str, Any]) -> Tuple[int, str]:
+    """
+    运行数据集目录下的 pred.py
+
+    Args:
+        pred_params: Pred 参数字典，支持 n_proc 等
+
+    Returns:
+        Tuple[int, str]: (退出码, 输出日志)
+    """
+    pred_script = check_pred_script()
+    n_proc = pred_params.get("n_proc", 3)
+
+    logger.info("=" * 50)
+    logger.info("开始运行 Pred 测试...")
+    logger.info(f"脚本: {pred_script}")
+    logger.info(f"模型: {BaseConfig.MODEL_NAME}")
+    logger.info(f"并发进程数: {n_proc}")
+    logger.info("=" * 50)
+
+    pred_cmd = [
+        "python", pred_script,
+        "--model", BaseConfig.MODEL_NAME,
+        "--n_proc", str(n_proc),
+    ]
+
+    logger.info(f"执行命令: {' '.join(pred_cmd)}")
+    logger.info("")
+
+    log_dir = os.path.dirname(BaseConfig.PRED_LOG)
+    if log_dir:
+        os.makedirs(log_dir, exist_ok=True)
+
+    try:
+        process = subprocess.Popen(
+            pred_cmd,
+            cwd=BaseConfig.DATASET_DIR,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+        )
+
+        output_lines = []
+        for line in iter(process.stdout.readline, ""):
+            if line:
+                print(line, end="")
+                output_lines.append(line)
+
+        process.wait()
+        exit_code = process.returncode
+
+        with open(BaseConfig.PRED_LOG, "w") as f:
+            f.write("".join(output_lines))
+
+        if exit_code == 0:
+            logger.info("")
+            logger.info("✓ Pred 测试完成！")
+            logger.info(f"日志保存在: {BaseConfig.PRED_LOG}")
+        else:
+            logger.error(f"Pred 测试失败 (退出码: {exit_code})")
+            logger.error(f"请检查日志: {BaseConfig.PRED_LOG}")
+
+        return exit_code, "".join(output_lines)
+
+    except Exception as e:
+        logger.error(f"运行 Pred 时出错: {e}")
+        raise RuntimeError(f"Pred 执行失败: {e}")
+
+
 def cleanup_vllm_service():
     """清理vLLM服务"""
     if BaseConfig.AUTO_CLEANUP:
@@ -372,7 +466,7 @@ TEST_CONFIGS: Dict[str, Dict[str, Dict[str, Any]]] = {
             "max_num_seqs": 16,
         },
         "benchmark_params": {
-            "num_prompts": 10,
+            "num_prompts": 30,
             "min_input_len": 32000,
             "max_input_len": 100000,
             "max_concurrency": 3,
@@ -391,7 +485,7 @@ TEST_CONFIGS: Dict[str, Dict[str, Dict[str, Any]]] = {
             "max_num_seqs": 16,
         },
         "benchmark_params": {
-            "num_prompts": 10,
+            "num_prompts": 30,
             "min_input_len": 32000,
             "max_input_len": 100000,
             "max_concurrency": 3,
@@ -423,13 +517,55 @@ TEST_CONFIGS: Dict[str, Dict[str, Dict[str, Any]]] = {
             "max_num_seqs": 16,
         },
         "benchmark_params": {
-            "num_prompts": 10,
+            "num_prompts": 30,
             "min_input_len": 32000,
             "max_input_len": 100000,
             "max_concurrency": 3,
             "output_len": 256,
         },
-    }
+    },
+    "test_kvc_baseline_acc": {
+        "vllm_params": {
+            "max_model_len": 1000000,
+            "gpu_memory_utilization": 0.7,
+            "tensor_parallel": 4,
+            "swap_space": 100,
+            "max_num_seqs": 16,
+        },
+        "pred_params": {
+            "n_proc": 3,
+        },
+    },
+    "test_kvc_hot_acc_4096": {
+        "vllm_params": {
+            "max_model_len": 1000000,
+            "gpu_memory_utilization": 0.7,
+            "copy_method": "raw",
+            "sparse_topk": 4096,
+            "cache_policy": "hot-score",
+            "tensor_parallel": 4,
+            "swap_space": 100,
+            "max_num_seqs": 16,
+        },
+        "pred_params": {
+            "n_proc": 3,
+        },
+    },
+    "test_kvc_hot_acc_2048": {
+        "vllm_params": {
+            "max_model_len": 1000000,
+            "gpu_memory_utilization": 0.7,
+            "copy_method": "raw",
+            "sparse_topk": 2048,
+            "cache_policy": "hot-score",
+            "tensor_parallel": 4,
+            "swap_space": 100,
+            "max_num_seqs": 16,
+        },
+        "pred_params": {
+            "n_proc": 3,
+        },
+    },
 }
 
 
@@ -444,11 +580,15 @@ def vllm_service_with_params(request):
     config = TEST_CONFIGS.get(request.node.name, {})
     vllm_params = config.get("vllm_params", {})
     benchmark_params = config.get("benchmark_params", {})
+    pred_params = config.get("pred_params", {})
     request.node.benchmark_params = benchmark_params
+    request.node.pred_params = pred_params
 
     # 打印配置
-    print_config(vllm_params, benchmark_params)
-    check_paths()
+    print_config(vllm_params, benchmark_params, pred_params or None)
+    check_paths(require_benchmark=not bool(pred_params))
+    if pred_params:
+        check_pred_script()
 
     # 启动服务
     process = start_vllm_service(vllm_params)
@@ -483,6 +623,12 @@ def _assert_benchmark_success(benchmark_params: Dict[str, Any]):
         logger.warning("结果文件未生成")
 
 
+def _assert_pred_success(pred_params: Dict[str, Any]):
+    """运行 pred.py 并校验结果"""
+    exit_code, _output = run_pred(pred_params)
+    assert exit_code == 0, f"Pred 执行失败，退出码: {exit_code}"
+
+
 def _run_named_benchmark_test(request, label: str):
     """按 TEST_CONFIGS 中同名 key 的配置执行 benchmark"""
     benchmark_params = request.node.benchmark_params
@@ -495,26 +641,53 @@ def _run_named_benchmark_test(request, label: str):
     logger.info("=" * 50)
 
 
+def _run_named_pred_test(request, label: str):
+    """按 TEST_CONFIGS 中同名 key 的配置执行 pred.py"""
+    pred_params = request.node.pred_params
+    logger.info("=" * 50)
+    logger.info(f"开始执行 {label} Pred 测试...")
+    logger.info("=" * 50)
+    _assert_pred_success(pred_params)
+    logger.info("=" * 50)
+    logger.info(f"✓ {label} Pred 测试通过！")
+    logger.info("=" * 50)
+
+
 def test_kvc_hot_perf_1M(vllm_service_with_params, request):
-    """KVC hot-score 策略，100 万上下文"""
-    _run_named_benchmark_test(request, "KVC hot-score 1M")
+    """性能：KVC hot-score (sparse_topk=2048)，1M 上下文，benchmark_serving 输入 700k~1M"""
+    _run_named_benchmark_test(request, "KVC hot-score perf 1M (topk=2048)")
 
 
 def test_kvc_hot_perf_100k_2048(vllm_service_with_params, request):
-    """KVC hot-score 策略，10 万上下文，sparse_topk=2048"""
-    _run_named_benchmark_test(request, "KVC hot-score 100k (topk=2048)")
+    """性能：KVC hot-score (sparse_topk=2048)，100k 上下文，benchmark_serving 输入 32k~100k"""
+    _run_named_benchmark_test(request, "KVC hot-score perf 100k (topk=2048)")
 
 
 def test_kvc_hot_perf_100k_4096(vllm_service_with_params, request):
-    """KVC hot-score 策略，10 万上下文，sparse_topk=4096"""
-    _run_named_benchmark_test(request, "KVC hot-score 100k (topk=4096)")
+    """性能：KVC hot-score (sparse_topk=4096)，100k 上下文，benchmark_serving 输入 32k~100k"""
+    _run_named_benchmark_test(request, "KVC hot-score perf 100k (topk=4096)")
 
 
 def test_kvc_baseline_perf_1M(vllm_service_with_params, request):
-    """Baseline 基线，100 万上下文"""
-    _run_named_benchmark_test(request, "Baseline 1M")
+    """性能：Baseline（无 KVC），1M 上下文，benchmark_serving 输入 700k~1M"""
+    _run_named_benchmark_test(request, "Baseline perf 1M")
 
 
 def test_kvc_baseline_perf_100k(vllm_service_with_params, request):
-    """Baseline 基线，10 万上下文"""
-    _run_named_benchmark_test(request, "Baseline 100k")
+    """性能：Baseline（无 KVC），100k 上下文，benchmark_serving 输入 32k~100k"""
+    _run_named_benchmark_test(request, "Baseline perf 100k")
+
+
+def test_kvc_baseline_acc(vllm_service_with_params, request):
+    """精度：Baseline（无 KVC），1M 上下文，运行 pred.py (n_proc=3)"""
+    _run_named_pred_test(request, "Baseline acc 1M")
+
+
+def test_kvc_hot_acc_4096(vllm_service_with_params, request):
+    """精度：KVC hot-score (sparse_topk=4096)，1M 上下文，运行 pred.py (n_proc=3)"""
+    _run_named_pred_test(request, "KVC hot-score acc 1M (topk=4096)")
+
+
+def test_kvc_hot_acc_2048(vllm_service_with_params, request):
+    """精度：KVC hot-score (sparse_topk=2048)，1M 上下文，运行 pred.py (n_proc=3)"""
+    _run_named_pred_test(request, "KVC hot-score acc 1M (topk=2048)")

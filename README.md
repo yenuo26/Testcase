@@ -43,6 +43,7 @@ pip install pytest requests
 | `BASE_URL` | `http://127.0.0.1:$PORT` | benchmark 请求地址 |
 | `VLLM_LOG` | `$WORK_DIR/vllm_run.log` | vLLM 服务日志 |
 | `BENCHMARK_LOG` | `$WORK_DIR/run_benchmark.log` | benchmark 运行日志 |
+| `PRED_LOG` | `$WORK_DIR/run_pred.log` | pred.py 运行日志 |
 | `SERVICE_TIMEOUT` | `600` | 等待服务就绪超时（秒） |
 | `HEALTH_CHECK_INTERVAL` | `2` | 健康检查间隔（秒） |
 | `AUTO_CLEANUP` | `true` | 测试结束后是否自动停止 vLLM 进程 |
@@ -66,8 +67,17 @@ export AUTO_CLEANUP=false   # 测试后保留 vLLM 进程便于调试
 | `test_kvc_hot_perf_100k_4096` | KVC hot-score，10 万上下文 | `sparse_topk=4096` | 32k ~ 100k |
 | `test_kvc_baseline_perf_1M` | Baseline，100 万上下文 | 不启用 cache-policy | 700k ~ 1M |
 | `test_kvc_baseline_perf_100k` | Baseline，10 万上下文 | 不启用 cache-policy | 32k ~ 100k |
+| `test_kvc_baseline_acc` | Baseline，LongBench 精度评估 | 不启用 cache-policy | 运行 `pred.py` |
+| `test_kvc_hot_acc_2048` | KVC hot-score 精度评估 | `sparse_topk=2048` | 运行 `pred.py` |
+| `test_kvc_hot_acc_4096` | KVC hot-score 精度评估 | `sparse_topk=4096` | 运行 `pred.py` |
 
-各用例的 vLLM / benchmark 参数定义在 `test_kvc.py` 中的 `TEST_CONFIGS` 字典，修改配置请编辑该字典并保持 key 与测试函数名一致。
+各用例的 vLLM / benchmark / pred 参数定义在 `test_kvc.py` 中的 `TEST_CONFIGS` 字典，修改配置请编辑该字典并保持 key 与测试函数名一致。
+
+Pred 类用例在服务就绪后执行：
+
+```bash
+python {DATASET_DIR}/pred.py --model {MODEL_NAME} --n_proc 3
+```
 
 ## 使用方法
 
@@ -92,6 +102,11 @@ pytest test_kvc.py::test_kvc_hot_perf_1M -v
 # Baseline 对比
 pytest test_kvc.py::test_kvc_baseline_perf_100k -v
 pytest test_kvc.py::test_kvc_baseline_perf_1M -v
+
+# LongBench pred 精度评估
+pytest test_kvc.py::test_kvc_baseline_acc -v
+pytest test_kvc.py::test_kvc_hot_acc_2048 -v
+pytest test_kvc.py::test_kvc_hot_acc_4096 -v
 ```
 
 ### 查看实时输出
@@ -117,6 +132,7 @@ pytest test_kvc.py -v -s
 |------|------|
 | vLLM 服务日志 | `$VLLM_LOG`（默认 `/vllm-workspace/vllm_run.log`） |
 | Benchmark 日志 | `$BENCHMARK_LOG`（默认 `/vllm-workspace/run_benchmark.log`） |
+| Pred 日志 | `$PRED_LOG`（默认 `/vllm-workspace/run_pred.log`） |
 | Benchmark 结果 | `$BENCHMARK_DIR/benchmark_results.json` |
 
 ## 常见问题
