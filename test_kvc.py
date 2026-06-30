@@ -21,7 +21,8 @@ from typing import Optional, Tuple, Dict, Any
 logging.basicConfig(
     level=logging.INFO,
     format='[%(levelname)s] %(asctime)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
+    datefmt='%Y-%m-%d %H:%M:%S',
+    force=True,
 )
 logger = logging.getLogger(__name__)
 
@@ -46,8 +47,8 @@ class BaseConfig:
     PRED_LOG = os.environ.get("PRED_LOG", os.path.join(WORK_DIR, "run_pred.log"))
 
     # 服务配置
-    PORT = int(os.environ.get("PORT", 8001))
-    BASE_URL = os.environ.get("BASE_URL", f"http://127.0.0.1:{PORT}")
+    VLLM_PORT = int(os.environ.get("VLLM_PORT", 8001))
+    BASE_URL = os.environ.get("BASE_URL", f"http://127.0.0.1:{VLLM_PORT}")
 
     # 超时设置
     SERVICE_TIMEOUT = int(os.environ.get("SERVICE_TIMEOUT", 600))
@@ -73,7 +74,7 @@ def print_config(
     logger.info(f"  BENCHMARK_DIR: {BaseConfig.BENCHMARK_DIR}")
     logger.info(f"  DATASET_DIR: {BaseConfig.DATASET_DIR}")
     logger.info(f"  DATASET_PATH: {BaseConfig.DATASET_PATH}")
-    logger.info(f"  PORT: {BaseConfig.PORT}")
+    logger.info(f"  VLLM_PORT: {BaseConfig.VLLM_PORT}")
     logger.info(f"  BASE_URL: {BaseConfig.BASE_URL}")
     logger.info("")
     logger.info("  vLLM参数:")
@@ -144,7 +145,7 @@ def start_vllm_service(vllm_params: Dict[str, Any]) -> subprocess.Popen:
     # 构建vLLM命令
     vllm_cmd = [
         "vllm", "serve", BaseConfig.MODEL_PATH,
-        "--port", str(BaseConfig.PORT),
+        "--port", str(BaseConfig.VLLM_PORT),
         "--max-model-len", str(vllm_params.get("max_model_len", 100000)),
         "--gpu-memory-utilization", str(vllm_params.get("gpu_memory_utilization", 0.25)),
         "--enforce-eager",
@@ -419,7 +420,7 @@ def cleanup_vllm_service():
         try:
             # 使用pkill杀掉vllm进程
             subprocess.run(
-                f"pkill -f 'vllm serve.*{BaseConfig.PORT}'",
+                f"pkill -f 'vllm serve.*{BaseConfig.VLLM_PORT}'",
                 shell=True,
                 capture_output=True
             )

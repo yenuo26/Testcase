@@ -39,8 +39,8 @@ pip install pytest requests
 | `BENCHMARK_DIR` | `$WORK_DIR/vllm` | vLLM benchmark 目录 |
 | `DATASET_DIR` | `$WORK_DIR/LongBench` | 数据集目录 |
 | `DATASET_PATH` | `$DATASET_DIR/data.json` | 数据集文件 |
-| `PORT` | `8001` | vLLM 服务端口 |
-| `BASE_URL` | `http://127.0.0.1:$PORT` | benchmark 请求地址 |
+| `VLLM_PORT` | `8001` | vLLM 服务端口 |
+| `BASE_URL` | `http://127.0.0.1:$VLLM_PORT` | benchmark 请求地址 |
 | `VLLM_LOG` | `$WORK_DIR/vllm_run.log` | vLLM 服务日志 |
 | `BENCHMARK_LOG` | `$WORK_DIR/run_benchmark.log` | benchmark 运行日志 |
 | `PRED_LOG` | `$WORK_DIR/run_pred.log` | pred.py 运行日志 |
@@ -52,7 +52,7 @@ pip install pytest requests
 
 ```bash
 export MODEL_DIR=/data/models
-export PORT=8002
+export VLLM_PORT=8002
 export AUTO_CLEANUP=false   # 测试后保留 vLLM 进程便于调试
 ```
 
@@ -111,11 +111,23 @@ pytest test_kvc.py::test_kvc_hot_acc_4096 -v
 
 ### 查看实时输出
 
+项目根目录已配置 `pytest.ini`，`logger.info` 会在 pytest 运行时实时打屏：
+
+```bash
+pytest test_kvc.py -v
+```
+
+若未使用 `pytest.ini`，可手动开启：
+
+```bash
+pytest test_kvc.py -v --log-cli-level=INFO
+```
+
+benchmark / pred 子进程的 stdout 需加 `-s` 才能显示：
+
 ```bash
 pytest test_kvc.py -v -s
 ```
-
-`-s` 可显示 benchmark 进程的 stdout。
 
 ## 执行流程
 
