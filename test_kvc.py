@@ -4,6 +4,7 @@
 """
 vLLM KVC Benchmark Pytest Script
 Usage: pytest test_kvc.py -v
+请运行前先下载https://huggingface.co/datasets/zai-org/LongBench-v2/tree/main
 """
 
 import os
